@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { Logger } from "@/utils/logger";
+
+const logger = new Logger("API:Example");
 
 // Example data
 const EXAMPLE_DATA = [
@@ -25,9 +28,34 @@ const EXAMPLE_DATA = [
   },
 ];
 
-export async function GET() {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+export async function GET(request: Request) {
+  try {
+    logger.info("GET /api/example - Request started");
 
-  return NextResponse.json(EXAMPLE_DATA);
+    // Log request details
+    const url = new URL(request.url);
+    logger.debug("Request details", {
+      method: request.method,
+      path: url.pathname,
+      searchParams: Object.fromEntries(url.searchParams),
+    });
+
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    logger.info("GET /api/example - Request completed successfully", {
+      itemCount: EXAMPLE_DATA.length,
+    });
+
+    return NextResponse.json(EXAMPLE_DATA);
+  } catch (error) {
+    logger.error("GET /api/example - Request failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
 }

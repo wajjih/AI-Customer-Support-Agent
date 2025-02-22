@@ -1,4 +1,4 @@
-# Next.js Server Actions Demo
+# Next.js Template
 
 This is a template repository showcasing Next.js Server Actions, React Server Components, and modern data fetching patterns. The project includes a Todo list implementation and examples of API integration with proper loading states and error handling.
 
