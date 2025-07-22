@@ -1,61 +1,74 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Logger } from "@/utils/logger";
+import OpenAI from "openai";
+const logger = new Logger("API:Chat");
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
 
-const logger = new Logger("API:Example");
 
-// Example data
-const EXAMPLE_DATA = [
-  {
-    id: 1,
-    title: "Server-side Rendering",
-    description:
-      "Next.js automatically renders pages on the server for better performance.",
-    createdAt: "2024-01-01T00:00:00.000Z",
-  },
-  {
-    id: 2,
-    title: "API Routes",
-    description:
-      "Create API endpoints using file-system routing in the app/api directory.",
-    createdAt: "2024-01-02T00:00:00.000Z",
-  },
-  {
-    id: 3,
-    title: "Data Fetching",
-    description:
-      "Use React Server Components to fetch data directly on the server.",
-    createdAt: "2024-01-03T00:00:00.000Z",
-  },
-];
 
-export async function GET(request: Request) {
-  try {
-    logger.info("GET /api/example - Request started");
-
-    // Log request details
-    const url = new URL(request.url);
-    logger.debug("Request details", {
-      method: request.method,
-      path: url.pathname,
-      searchParams: Object.fromEntries(url.searchParams),
-    });
-
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    logger.info("GET /api/example - Request completed successfully", {
-      itemCount: EXAMPLE_DATA.length,
-    });
-
-    return NextResponse.json(EXAMPLE_DATA);
-  } catch (error) {
-    logger.error("GET /api/example - Request failed", {
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+export default async (req: NextRequest, res: NextResponse) => {
+  if (req.method !== "POST") {
+    return NextResponse.json({ message: "Not Found" });
   }
-}
+
+  
+
+  try {
+    const body = await req.json();
+    const {
+      model,
+      messages,
+      max_tokens,
+      temperature,
+      stream,
+      call,
+      ...restParams
+    } = body;
+
+    const lastMessage = messages?.[messages.length - 1];
+    const prompt = await openai.completions.create({
+      model: "gpt-3.5-turbo-instruct",
+      prompt: `
+        Create a prompt which can act as a prompt templete where I put the original prompt and it can modify it according to my intentions so that the final modified prompt is more detailed.You can expand certain terms or keywords.
+        ----------
+        PROMPT: ${lastMessage.content}.
+        MODIFIED PROMPT: `,
+      max_tokens: 500,
+      temperature: 0.7,
+    });
+
+    const modifiedMessage = [
+      ...messages.slice(0, messages.length - 1),
+      { ...lastMessage, content: prompt.choices[0].text },
+    ];
+
+    if (stream) {
+      const completionStream = await openai.chat.completions.create({
+        model: model || "gpt-3.5-turbo",
+        ...restParams,
+        messages: modifiedMessage,
+        max_tokens: max_tokens || 150,
+        temperature: temperature || 0.7,
+        stream: true,
+      } as OpenAI.Chat.ChatCompletionCreateParamsStreaming);
+      
+
+      for await (const data of completionStream) {
+        return NextResponse.json(data);
+      }
+    } else {
+      const completion = await openai.chat.completions.create({
+        model: model || "gpt-3.5-turbo",
+        ...restParams,
+        messages: modifiedMessage,
+        max_tokens: max_tokens || 150,
+        temperature: temperature || 0.7,
+        stream: false,
+      });
+      return NextResponse.json(completion);
+    }
+  } catch (e) {
+    console.log(e);
+    return NextResponse.json({ error: e });
+  }
+};
