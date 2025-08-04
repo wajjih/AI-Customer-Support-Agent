@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { Logger } from "@/utils/logger";
 import OpenAI from "openai";
 const logger = new Logger("API:Chat");
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
+
+
+const gemini = new OpenAI({ 
+  apiKey: process.env.GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
+});
 
 
 
-export default async (req: NextRequest, res: NextResponse) => {
+export async function POST(req: NextRequest) {
   if (req.method !== "POST") {
     return NextResponse.json({ message: "Not Found" });
   }
@@ -26,25 +31,28 @@ export default async (req: NextRequest, res: NextResponse) => {
     } = body;
 
     const lastMessage = messages?.[messages.length - 1];
-    const prompt = await openai.completions.create({
-      model: "gpt-3.5-turbo-instruct",
-      prompt: `
+    const prompt = await gemini.chat.completions.create({
+      model: "gemini-2.0-flash-lite",
+      messages: [{
+        role: "user",
+        content: `
         Create a prompt which can act as a prompt templete where I put the original prompt and it can modify it according to my intentions so that the final modified prompt is more detailed.You can expand certain terms or keywords.
         ----------
         PROMPT: ${lastMessage.content}.
         MODIFIED PROMPT: `,
+      }],
       max_tokens: 500,
       temperature: 0.7,
     });
 
     const modifiedMessage = [
       ...messages.slice(0, messages.length - 1),
-      { ...lastMessage, content: prompt.choices[0].text },
+      { ...lastMessage, content: prompt.choices[0].message.content },
     ];
 
     if (stream) {
-      const completionStream = await openai.chat.completions.create({
-        model: model || "gpt-3.5-turbo",
+      const completionStream = await gemini.chat.completions.create({
+        model: model || "gemini-2.0-flash-lite",
         ...restParams,
         messages: modifiedMessage,
         max_tokens: max_tokens || 150,
@@ -57,8 +65,8 @@ export default async (req: NextRequest, res: NextResponse) => {
         return NextResponse.json(data);
       }
     } else {
-      const completion = await openai.chat.completions.create({
-        model: model || "gpt-3.5-turbo",
+      const completion = await gemini.chat.completions.create({
+        model: model || "gemini-2.0-flash-lite",
         ...restParams,
         messages: modifiedMessage,
         max_tokens: max_tokens || 150,
